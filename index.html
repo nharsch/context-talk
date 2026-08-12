@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Context Engineering</title>
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+	<style>
+		.reveal { font-size: 32px; }
+		.reveal h1, .reveal h2, .reveal h3 { text-transform: none; }
+		.reveal .slides section { text-align: left; }
+		.reveal .slides section.center { text-align: center; }
+		.reveal blockquote { width: 90%; font-style: italic; background: rgba(255,255,255,0.05); padding: 20px; border-left: 4px solid #42affa; }
+		.reveal code { color: #42affa; }
+		.reveal ul { margin-left: 0; }
+		.reveal .rank-list { font-size: 0.75em; }
+		.reveal .rank-list li { margin-bottom: 0.3em; }
+		.reveal .bad { color: #ff6b6b; }
+		.reveal .good { color: #69db7c; }
+		.reveal .accent { color: #42affa; }
+		.reveal .small { font-size: 0.7em; color: #888; }
+	</style>
+</head>
+<body>
+	<div class="reveal">
+		<div class="slides">
+			<section data-markdown data-separator="^---$" data-separator-vertical="^--$">
+				<textarea data-template>
+<!-- .slide: class="center" -->
+# Context Engineering
+
+### What is an Agent, Really?
+
+--
+
+## What is "context"?
+
+**Everyday usage:** the circumstances that form the setting for an event or idea
+
+**For LLMs:** the set of tokens included when sampling from the model
+
+Quality context is important for making high quality decisions — with or without an agent.
+
+The model has training data baked into its weights — that's baseline knowledge.
+
+The context window is what **steers, supplements, and overrides** that knowledge at inference time.
+
+---
+
+<!-- .slide: class="center" -->
+# What is an Agent?
+
+--
+
+## An LLM is a function
+
+```
+// as a pure function
+f(query) → response
+
+// in reality, somewhat random based on temp param
+f(query, temperature, randomSeed) → response
+```
+
+- Stateless. No memory.
+- Cannot _do_ antyhing.
+- It receives text. It returns text. That's it.
+
+--
+
+## "Chat" is an illusion
+
+```
+f(chatHistory + newQuery) → response
+```
+
+Every turn, the **harness** replays the full conversation back to the model.
+
+The model doesn't "remember" — it re-reads everything.
+
+Every message **fills up** the context window. Eventually, you hit the ceiling.
+
+Thus, the "context window" (the maximum query length of the underlying model) must be _managed_
+
+--
+
+## How to manage the context window: The Harness
+
+The harness makes a model an agent
+
+ChatGPT, Claude (chat, Code, Cowork), Cursor, Copilot, they all:
+
+- Write the system prompt
+- Choose which tools to expose
+- Handle tool calling
+- Manage memory and context
+- Decide what fits in the window
+
+--
+
+<!-- .slide: data-background-color="#f5f3ee" -->
+
+## The agent harness interacts with the outside world
+
+![The Harness](harness.png) <!-- .element: style="max-height: 55vh; max-width: 80vw; object-fit: contain;" -->
+
+--
+
+## Examples of context you don't see
+
+- **System prompt** — instructions injected before your first message
+- **Thinking / reasoning traces** — the model's internal chain-of-thought
+- **Tool call invocations** — the model asking to run a tool
+- **Tool call responses** — results returned from the tool
+- **Injected context** — retrieved docs, memory, skill specs loaded by the harness
+- **Prior conversation summaries** — compacted history replacing older messages
+
+All of this is in the context window. You just don't see it in the chat UI.
+
+--
+
+## What an LLM response actually looks like
+
+```json
+[
+  { "type": "thinking",
+    "text": "The user wants to know about the deploy.
+     Let me check the CI pipeline status..." },
+
+  { "type": "tool_use",
+    "name": "bash",
+    "input": "git log --oneline -5" },
+
+  { "type": "tool_result",
+    "output": "a1b2c3d fix: resolve timeout\n..." },
+
+  { "type": "tool_use",
+    "name": "redmine_get_issue",
+    "input": { "issue_id": 14930 } },
+
+  { "type": "tool_result",
+    "output": "{ status: 'In QA', assignee: ... }" },
+
+  { "type": "text",
+    "text": "The deploy looks good — here's
+     what changed..." }
+]
+```
+
+The user only sees the last one. <!-- .element: class="accent" -->
+
+--
+
+<!-- .slide: class="center" -->
+# Context is a Finite Resource
+
+--
+
+## The window has limits
+
+The context window is the **only thing the model can see**.
+
+More tokens in the window → worse recall.
+
+Context is a **finite resource with diminishing returns**.
+
+--
+
+<!-- .slide: class="center" data-background-color="#ffffff" -->
+
+![Needle in a Haystack — Claude 2.1](needle-haystack.png) <!-- .element: style="max-height: 55vh; max-width: 80vw; object-fit: contain;" -->
+
+<!-- .element: class="small" -->
+Greg Kamradt's needle-in-a-haystack benchmark — Claude 2.1 (200K context)
+
+--
+
+## Context Patterns
+
+What to include. What to leave out. When to load it.
+
+--
+
+## Pattern: Tool Calling
+
+The model can't act on the world — but the harness can.
+
+The model outputs a structured **request** to use a tool. The harness executes it and returns the result.
+
+- Read a file
+- Run a shell command
+- Query an API
+- Search a database
+
+Every tool result becomes **new context** in the window.
+
+--
+
+## Pattern: Progressive Disclosure
+
+Load context **just-in-time**, not all upfront.
+
+Example: Claude Code **skills** — a skill spec is only loaded when invoked, not sitting in the system prompt permanently.
+
+You don't dump the whole manual. You hand over the right page.
+
+--
+
+<!-- .slide: class="center" data-background-image="i_know_kung_fu.jpg" data-background-size="contain" data-background-color="#000" -->
+
+--
+
+## Pattern: Memory
+
+Structured notes **persisted outside the window**.
+
+Pulled back in when relevant.
+
+The agent writes things down so it can forget safely.
+
+How does the model know what's available?
+- **Always loaded** — short index injected into system prompt every turn
+- **Searched at inference** — harness searches a vector DB based on current query (RAG)
+- **Tool-based** — model has a "search memory" tool it can call on demand
+
+--
+
+## Pattern: Compaction
+
+Summarize older context to fit the window.
+
+Lossy, but better than hitting the ceiling.
+
+--
+
+## Pattern: Multi-Agent
+
+Each sub-agent gets its own **fresh window**.
+
+Parallel exploration without context collision.
+
+--
+
+<!-- .slide: class="center" -->
+
+Every pattern is a different flavor of the same idea:
+
+**Get the right information into the window at the right time.**
+
+---
+
+<!-- .slide: class="center" -->
+# Good Context Sources
+
+--
+
+## Not all sources are equal
+
+What makes a <span class="good">good</span> context source?
+
+- **Addressable** — URL, file path. An agent can point to it.
+- **Persistent** — Still there tomorrow.
+- **Structured** — Parseable, not ambiguous.
+- **Time-indexed** — You can ask "what changed?"
+
+--
+
+## What makes a <span class="bad">bad</span> source?
+
+- Ephemeral
+- Vague
+- Inaccessible
+
+--
+
+## Rank ordering
+
+1. **Codebase** — ground truth of *what is*
+2. **Tickets** — ground truth of *what should be*
+3. **Documentation** — decisions and "why"
+4. **PM tools** — coordination, live + ephemeral
+5. **Project Slack channels** — stream of updates
+6. <span class="bad">Slack DMs</span> — not public, not discoverable
+7. <span class="bad">Unshared meeting notes</span> — not accessible
+8. <span class="bad">Verbal confirmation</span> — almost useless
+
+--
+
+<!-- .slide: class="center" -->
+
+> If it isn't recorded, it didn't happen.
+
+Not just a process rule.
+
+**It's literally true for agents.**
+
+If it's not in a source the agent can read, it doesn't exist.
+
+--
+
+## Examples scored
+
+| Source | Addressable | Versioned | Structured | Queryable |
+|--------|:-:|:-:|:-:|:-:|
+| Git repo | ✅ | ✅ | ✅ | ✅ |
+| Redmine ticket | ✅ | ✅ | ✅ | ✅ |
+| Google Doc | ✅ | ❌ | ❌ | ❌ |
+| Verbal confirmation | ❌ | ❌ | ❌ | ❌ |
+
+--
+
+## MCPs: the bridge
+
+**Model Context Protocol** makes non-native sources accessible.
+
+Redmine, Slack, Grafana, databases —
+wrapped in structured, queryable tools the agent can call.
+
+The source doesn't have to be LLM-native.
+It just needs a good interface.
+
+--
+
+## Obsidian as context home
+
+A vault of wikilinked notes that **point agents to the right sources**.
+
+- Project notes link to tickets, Slack channels, docs
+- Skills define how to use each tool
+- You get **visibility** into what the agent knows
+- And **control** over how it discovers context
+
+---
+
+<!-- .slide: class="center" -->
+# Where This Is Going
+
+--
+
+## The gold standard
+
+A perfect context source has two properties:
+
+1. **An ordered log of factual changes**
+   Events, diffs, assertions — in time
+
+2. **A queryable view derived from that log**
+   Current state as a projection
+
+--
+
+<!-- .slide: class="center" data-background-color="#ffffff" -->
+
+![Log → Graph → Behaviors](log_is_agent_detail.png) <!-- .element: style="max-height: 85vh;" -->
+
+--
+
+## You already know this pattern
+
+**Git** does this. Commit log → working tree.
+
+**Databases** do this. Write-ahead log → tables.
+
+**Redux** does this. Action log → state.
+
+The log is the source of truth.
+Everything else is a materialized view.
+
+--
+
+## The convergence
+
+In 2026, the AI agent world arrived at the same insight independently:
+
+> The agent session is an append-only event log.
+> Memory, context, and collaboration are projections over that log.
+
+— Anthropic, Electric, Cloudflare, LangChain
+
+--
+
+<!-- .slide: class="center" -->
+
+> Context isn't something you curate.
+> It's something you **derive**.
+
+--
+
+## The takeaway
+
+When choosing where to put information, ask:
+
+- Can an agent **read** it?
+- Can it see what **changed**?
+- Can it **query** it?
+
+If yes → <span class="good">good context source</span>.
+
+If no → <span class="bad">you're having a meeting</span>.
+
+---
+
+<!-- .slide: class="center" -->
+# Thanks
+
+Nigel Harsch
+
+				</textarea>
+			</section>
+		</div>
+	</div>
+	<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/markdown/markdown.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+	<script>
+		Reveal.initialize({
+			hash: true,
+			plugins: [RevealMarkdown, RevealHighlight],
+			markdown: {
+				smartypants: true
+			}
+		});
+	</script>
+</body>
+</html>
