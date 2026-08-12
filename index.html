@@ -321,7 +321,9 @@ Again: Addressable, Persistent, Queryable, Change tracking
 
 --
 
-## The Ideal "Live" Context Source
+## Where I hope we get to
+
+The Ideal "Live" Context Source:
 
 1. **An ordered log of factual changes**
    Events, diffs, assertions — in time
@@ -343,13 +345,15 @@ from [The Log is the Agent](https://arxiv.org/pdf/2605.21997)
 
 ## This pattern works
 
-**Git** Commit log → working tree.
+**Git**: Commit log → working tree.
 
-**Databases** Write-ahead log → tables.
+**Databases**: Write-ahead log → tables.
 
-**Redux** Action log → state.
+**Redux**: Action log → state.
 
-**Event Sourcing** streams of events -> parallel stateful views
+**Event Sourcing**: streams of events -> parallel stateful views
+
+^^ this is how tsi-sync works
 
 --
 
