@@ -240,15 +240,7 @@ Lossy, but better than hitting the ceiling.
 
 Each sub-agent gets its own **fresh window**.
 
-Parallel exploration without context collision.
-
---
-
-<!-- .slide: class="center" -->
-
-Every pattern is a different flavor of the same idea:
-
-**Get the right information into the window at the right time.**
+Sub-agents only surface relevant _distilled_ context back to main agent
 
 ---
 
@@ -261,10 +253,10 @@ Every pattern is a different flavor of the same idea:
 
 What makes a <span class="good">good</span> context source?
 
-- **Addressable** — URL, file path. An agent can point to it.
+- **Addressable** — URL, file path. Multiple agents can point to it.
 - **Persistent** — Still there tomorrow.
-- **Structured** — Parseable, not ambiguous.
-- **Time-indexed** — You can ask "what changed?"
+- **Queryable** — Supports search (lexical, semantic) and/or logical queries (SQL, Graph queries)
+- **Time-indexed / Change tracking** — You can ask "what changed?"
 
 --
 
@@ -276,51 +268,22 @@ What makes a <span class="good">good</span> context source?
 
 --
 
-## Rank ordering
-
-1. **Codebase** — ground truth of *what is*
-2. **Tickets** — ground truth of *what should be*
-3. **Documentation** — decisions and "why"
-4. **PM tools** — coordination, live + ephemeral
-5. **Project Slack channels** — stream of updates
-6. <span class="bad">Slack DMs</span> — not public, not discoverable
-7. <span class="bad">Unshared meeting notes</span> — not accessible
-8. <span class="bad">Verbal confirmation</span> — almost useless
-
---
-
-<!-- .slide: class="center" -->
-
-> If it isn't recorded, it didn't happen.
-
-Not just a process rule.
-
-**It's literally true for agents.**
-
-If it's not in a source the agent can read, it doesn't exist.
-
---
-
 ## Examples scored
 
-| Source | Addressable | Versioned | Structured | Queryable |
+| Source | Addressable | Persistent | Queryable | Change Tracking |
 |--------|:-:|:-:|:-:|:-:|
 | Git repo | ✅ | ✅ | ✅ | ✅ |
 | Redmine ticket | ✅ | ✅ | ✅ | ✅ |
-| Google Doc | ✅ | ❌ | ❌ | ❌ |
-| Verbal confirmation | ❌ | ❌ | ❌ | ❌ |
+| Slack thread | ✅ | ✅ | ⚠️ | ⚠️ |
+| Google Doc | ✅ | ⚠️ | ⚠️ | ⚠️ |
+| Shared File | ⚠️ | ⚠️ | ❌ | ❌ |
+| Meeting notes | ❌ | ❌ | ⚠️ | ❌ |
 
---
 
-## MCPs: the bridge
+---
 
-**Model Context Protocol** makes non-native sources accessible.
-
-Redmine, Slack, Grafana, databases —
-wrapped in structured, queryable tools the agent can call.
-
-The source doesn't have to be LLM-native.
-It just needs a good interface.
+<!-- .slide: class="center" -->
+# Building good context sources
 
 --
 
@@ -333,16 +296,32 @@ A vault of wikilinked notes that **point agents to the right sources**.
 - You get **visibility** into what the agent knows
 - And **control** over how it discovers context
 
----
+--
 
-<!-- .slide: class="center" -->
-# Where This Is Going
+## MCPs
+
+**Model Context Protocol** makes non-native sources accessible.
+
+Redmine, Slack, Grafana, databases —
+wrapped in structured, queryable tools the agent can call.
+
+The source doesn't have to be LLM-native.
+It just needs a good interface. (Addressable, Queryable, Change Tracking)
 
 --
 
-## The gold standard
+## Knowledge Bases
 
-A perfect context source has two properties:
+- RAG: Vector DBs supporting semantic search
+- GraphRAG / Knowledge Graphs: Graph DBs encode entities and relationships
+- Wikis: Indexes and contextural links
+- Mixtures of the above
+
+Again: Addressable, Persistent, Queryable, Change tracking
+
+--
+
+## The Ideal "Live" Context Source
 
 1. **An ordered log of factual changes**
    Events, diffs, assertions — in time
@@ -352,40 +331,25 @@ A perfect context source has two properties:
 
 --
 
+## Agents could have these properties too:
+
+from [The Log is the Agent](https://arxiv.org/pdf/2605.21997)
+
 <!-- .slide: class="center" data-background-color="#ffffff" -->
 
 ![Log → Graph → Behaviors](log_is_agent_detail.png) <!-- .element: style="max-height: 85vh;" -->
 
 --
 
-## You already know this pattern
+## This pattern works
 
-**Git** does this. Commit log → working tree.
+**Git** Commit log → working tree.
 
-**Databases** do this. Write-ahead log → tables.
+**Databases** Write-ahead log → tables.
 
-**Redux** does this. Action log → state.
+**Redux** Action log → state.
 
-The log is the source of truth.
-Everything else is a materialized view.
-
---
-
-## The convergence
-
-In 2026, the AI agent world arrived at the same insight independently:
-
-> The agent session is an append-only event log.
-> Memory, context, and collaboration are projections over that log.
-
-— Anthropic, Electric, Cloudflare, LangChain
-
---
-
-<!-- .slide: class="center" -->
-
-> Context isn't something you curate.
-> It's something you **derive**.
+**Event Sourcing** streams of events -> parallel stateful views
 
 --
 
@@ -396,10 +360,6 @@ When choosing where to put information, ask:
 - Can an agent **read** it?
 - Can it see what **changed**?
 - Can it **query** it?
-
-If yes → <span class="good">good context source</span>.
-
-If no → <span class="bad">you're having a meeting</span>.
 
 ---
 
